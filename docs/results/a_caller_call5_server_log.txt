@@ -1,0 +1,9 @@
+17:08:46.237Z WARNING fault_injected {'fault': 'delay'}
+17:08:48.495Z WARNING fault_injected {'fault': 'delay'}
+17:08:49.248Z INFO reading_stored {'reading_id': 6253}
+17:08:49.252Z INFO http_request {'status_code': 201, 'duration_ms': 3022.03}
+17:08:50.983Z WARNING fault_injected {'fault': 'delay'}
+17:08:51.497Z INFO reading_replayed {'reading_id': 6253}
+17:08:51.500Z INFO http_request {'status_code': 200, 'duration_ms': 3006.97}
+17:08:53.985Z INFO reading_replayed {'reading_id': 6253}
+17:08:53.988Z INFO http_request {'status_code': 200, 'duration_ms': 3006.06}

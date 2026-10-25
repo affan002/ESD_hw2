@@ -11,7 +11,7 @@ Labels only ever take values from small fixed sets; never device_id or request_i
 import logging
 import sqlite3
 
-from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, Counter, Gauge, Histogram, Summary, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, Counter, Gauge, Histogram, generate_latest
 from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.registry import Collector
 
@@ -34,11 +34,12 @@ HTTP_REQUESTS = Counter(
 # (10-40 ms) and sparse above, but still bracket the 500 ms injected delay.
 # With only 10/25/50 ms bounds, p99 was estimated at 44 ms when the true value
 # was 25 ms (see docs/BUILD_LOG.md, stage B7).
+LATENCY_BUCKETS = (0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.04, 0.05, 0.075, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
 HTTP_DURATION = Histogram(
     "sensor_http_request_duration_seconds",
     "Time from receiving a request to finishing its response.",
     ["method", "route"],
-    buckets=(0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.04, 0.05, 0.075, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+    buckets=LATENCY_BUCKETS,
 )
 
 HTTP_IN_PROGRESS = Gauge(
@@ -46,14 +47,48 @@ HTTP_IN_PROGRESS = Gauge(
     "Requests currently being handled.",
 )
 
-# ---------- Ingestion (recorded in app/main.py, POST /readings) ----------
+# ---------- gRPC (recorded in app/grpc_server.py, ObservabilityInterceptor) ----------
+# Measured on the server, like the HTTP metrics above, with the same buckets so the
+# two transports can be compared directly. `method` is the RPC name and `code` the
+# gRPC status name: both small fixed sets.
 
-READING_OUTCOMES = ("normal", "anomaly", "rejected", "failed")
+GRPC_REQUESTS = Counter(
+    "sensor_grpc_requests_total",
+    "gRPC calls handled, by RPC method and status code.",
+    ["method", "code"],
+)
+GRPC_DURATION = Histogram(
+    "sensor_grpc_request_duration_seconds",
+    "Time from the server receiving a gRPC call to its handler returning.",
+    ["method"],
+    buckets=LATENCY_BUCKETS,  # same bounds as sensor_http_request_duration_seconds
+)
+GRPC_IN_PROGRESS = Gauge(
+    "sensor_grpc_requests_in_progress",
+    "gRPC calls currently being handled.",
+    ["method"],
+)
+GRPC_METHODS = ("SubmitReading",)
+GRPC_CODES = ("OK", "INVALID_ARGUMENT", "ALREADY_EXISTS", "RESOURCE_EXHAUSTED", "INTERNAL")
+
+# ---------- Ingestion (recorded in app/ingest.py, shared by HTTP and gRPC) ----------
+
+TRANSPORTS = ("http", "grpc")
+READING_OUTCOMES = ("normal", "anomaly", "replayed", "conflict", "rejected", "failed")
 READINGS = Counter(
     "sensor_readings_total",
-    "POST /readings attempts by outcome: normal/anomaly = stored (201), "
-    "rejected = invalid (422, not stored), failed = server error (5xx, not stored).",
-    ["outcome"],
+    "Reading submissions by transport and outcome: normal/anomaly = stored (201/OK), "
+    "replayed = identical repeat, nothing stored (200/OK), conflict = same device and timestamp "
+    "with different values (409/ALREADY_EXISTS), rejected = invalid (422/INVALID_ARGUMENT), "
+    "failed = server error (5xx/INTERNAL).",
+    ["transport", "outcome"],
+)
+
+RATE_LIMITED = Counter(
+    "sensor_rate_limited_total",
+    "Requests refused by the per-device rate limiter (HTTP 429 / gRPC RESOURCE_EXHAUSTED), "
+    "by HTTP route or RPC method.",
+    ["route"],
 )
 
 VALIDATION_FIELDS = ("device_id", "timestamp", "temperature_c", "humidity_pct", "battery_pct")
@@ -69,9 +104,12 @@ ANOMALIES = Counter(
     ["reason"],
 )
 
-DB_WRITE = Summary(
+# A Histogram, not a Summary: two processes (API and gRPC server) write to the
+# same database, and only histogram buckets can be summed across processes.
+DB_WRITE = Histogram(
     "sensor_db_write_duration_seconds",
     "Time to store one reading and update its device row (one SQLite transaction).",
+    buckets=(0.0005, 0.001, 0.0025, 0.005, 0.01, 0.015, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
 )
 
 # ---------- Fault injection (recorded in app/faults.py) ----------
@@ -90,8 +128,16 @@ FAULT_ACTIVE = Gauge(
 
 # Create every known label combination up front so each series exists at 0
 # from the first scrape; rate() and dashboards then work before the first event.
-for _outcome in READING_OUTCOMES:
-    READINGS.labels(_outcome)
+for _transport in TRANSPORTS:
+    for _outcome in READING_OUTCOMES:
+        READINGS.labels(_transport, _outcome)
+RATE_LIMITED.labels("/readings")
+RATE_LIMITED.labels("SubmitReading")
+for _method in GRPC_METHODS:
+    GRPC_IN_PROGRESS.labels(_method)
+    GRPC_DURATION.labels(_method)
+    for _code in GRPC_CODES:
+        GRPC_REQUESTS.labels(_method, _code)
 for _reason in REASON_CODES:
     ANOMALIES.labels(_reason)
 for _fault in FAULT_TYPES:

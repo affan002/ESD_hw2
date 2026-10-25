@@ -30,6 +30,12 @@ EXTRA_FIELDS = (
     "config",
     "error",
     "stats",
+    "transport",
+    "retry_after_s",
+    "existing_reading_id",
+    "rpc_method",
+    "grpc_code",
+    "grpc_details",
 )
 
 

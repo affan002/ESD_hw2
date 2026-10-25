@@ -1,3 +1,7 @@
+# Fixed project name, so container names (esd_hw2-api-1, …) don't depend on
+# the folder name. Filebeat matches containers by these names.
+name: esd_hw2
+
 # Docker's json-file log driver with rotation: at most 3 files x 10 MB per
 # container. Filebeat (Part C) reads these files; they're a short-term buffer,
 # and Elasticsearch is the long-term store.
@@ -26,6 +30,29 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
+    logging: *app-logging
+
+  # gRPC version of "submit a reading" (Part B of A2). Same image and the same
+  # SQLite volume as `api`: it calls the same business rule (app/ingest.py) on the
+  # same database, never the HTTP API. Metrics for Prometheus on :9101 (internal).
+  grpc:
+    image: sensor-api:dev
+    command: ["python", "-m", "app.grpc_server"]
+    ports:
+      - "127.0.0.1:50051:50051"
+    environment:
+      DB_PATH: /data/sensors.db
+      LOG_LEVEL: INFO
+    volumes:
+      - sensor-data:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 50051), 2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     logging: *app-logging
 
   simulator:
@@ -61,6 +88,7 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - api
+      - grpc
 
   # Host metrics (CPU, memory, disk, network) for the machine running Docker.
   # Host network and PID namespaces plus a read-only mount of / make it measure

@@ -1,0 +1,17 @@
+### HTTP success
+HTTP 201  {"id":1430,"device_id":"dev-904","timestamp":"2026-10-25T16:48:46.391Z","received_at":"2026-10-25T16:48:46.421Z","temperature_c":22.5,"humidity_pct":45.0,"battery_pct":88
+### HTTP failure
+HTTP 422  {"type":"urn:sensor-api:problem:validation-error","title":"Unprocessable Entity","status":422,"detail":"the request has invalid fields; see errors","instance":"/readings"
+### gRPC success
+OK  reading 1433  device=dev-905 timestamp=2026-10-25T16:48:46.790Z anomaly=False []  [request_id=b-grpc-ok-214846]
+### gRPC failure
+FAILED  INVALID_ARGUMENT: humidity_pct: Input should be less than or equal to 100  [request_id=b-grpc-bad-214846]
+### one request ID across both: HTTP stores the reading, gRPC repeats it (request_id=trace-214846)
+HTTP 201  {"id":1435,"device_id":"dev-906","timestamp":"2026-10-25T16:48:47.115Z","received_at":"2026-10-25T16:48:47.125Z","temperature_c":22.5,"humidity_pct":45.0,"battery_pct":88
+OK  reading 1435 (replayed)  device=dev-906 timestamp=2026-10-25T16:48:47.115Z anomaly=False []  [request_id=trace-214846]
+### logs for request_id=trace-214846
+  16:48:47.136Z sensor-api  device_registered {}
+  16:48:47.136Z sensor-api  reading_stored   {'transport': 'http', 'reading_id': 1435}
+  16:48:47.142Z sensor-api  http_request     {'status_code': 201}
+  16:48:47.353Z sensor-grpc grpc_request     {'rpc_method': 'SubmitReading', 'grpc_code': 'OK'}
+  16:48:47.353Z sensor-grpc reading_replayed {'transport': 'grpc', 'reading_id': 1435}

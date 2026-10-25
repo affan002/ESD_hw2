@@ -5,8 +5,11 @@ opened in autocommit mode; writes use an explicit BEGIN IMMEDIATE transaction.
 """
 
 import json
+import logging
 import sqlite3
 from pathlib import Path
+
+log = logging.getLogger("app.db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS devices (
@@ -32,6 +35,13 @@ CREATE INDEX IF NOT EXISTS ix_readings_device_time ON readings(device_id, id DES
 CREATE INDEX IF NOT EXISTS ix_readings_anomaly ON readings(is_anomaly, id DESC);
 """
 
+# Idempotency key: a device can't take two readings at the same instant. insert_reading()
+# enforces it (check-then-insert inside BEGIN IMMEDIATE); the unique index is a safety net
+# and makes that check an index lookup. A database written before A2 may already hold
+# duplicates (retries stored twice); then the index can't be unique, so a plain one is used.
+UNIQUE_KEY_INDEX = "CREATE UNIQUE INDEX IF NOT EXISTS ux_readings_device_recorded ON readings(device_id, recorded_at)"
+PLAIN_KEY_INDEX = "CREATE INDEX IF NOT EXISTS ix_readings_device_recorded ON readings(device_id, recorded_at)"
+
 _READING_COLUMNS = (
     "r.id, r.device_id, r.recorded_at, r.received_at, r.temperature_c, "
     "r.humidity_pct, r.battery_pct, r.is_anomaly, r.anomaly_reasons"
@@ -53,6 +63,14 @@ def init_schema(db_path: str) -> None:
     try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(SCHEMA)
+        try:
+            conn.execute(UNIQUE_KEY_INDEX)
+        except sqlite3.IntegrityError:
+            log.warning(
+                "existing duplicate readings; idempotency key index created as non-unique",
+                extra={"event": "schema_duplicate_readings"},
+            )
+            conn.execute(PLAIN_KEY_INDEX)
     finally:
         conn.close()
 
@@ -71,14 +89,22 @@ def insert_reading(
     humidity_pct: float,
     battery_pct: float,
     anomaly_reasons: list[str],
-) -> tuple[int, bool]:
+) -> tuple[int, bool, bool]:
     """Store a reading and update its device in one transaction.
 
-    Returns (reading_id, is_new_device).
+    Idempotent on (device_id, recorded_at): if that reading is already stored,
+    nothing is written and the existing id is returned with created=False.
+    Returns (reading_id, created, is_new_device).
     """
     is_anomaly = 1 if anomaly_reasons else 0
     conn.execute("BEGIN IMMEDIATE")
     try:
+        existing = conn.execute(
+            "SELECT id FROM readings WHERE device_id = ? AND recorded_at = ?", (device_id, recorded_at)
+        ).fetchone()
+        if existing is not None:
+            conn.execute("COMMIT")
+            return existing["id"], False, False
         reading_id = conn.execute(
             "INSERT INTO readings (device_id, recorded_at, received_at, temperature_c, humidity_pct,"
             " battery_pct, is_anomaly, anomaly_reasons) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -102,7 +128,7 @@ def insert_reading(
     except Exception:
         conn.execute("ROLLBACK")
         raise
-    return reading_id, is_new_device
+    return reading_id, True, is_new_device
 
 
 def _reading(row: sqlite3.Row) -> dict:
@@ -139,6 +165,11 @@ _DEVICE_QUERY = (
 def get_device(conn: sqlite3.Connection, device_id: str) -> dict | None:
     row = conn.execute(f"{_DEVICE_QUERY} WHERE d.device_id = ?", (device_id,)).fetchone()
     return _device(row) if row else None
+
+
+def get_reading(conn: sqlite3.Connection, reading_id: int) -> dict | None:
+    row = conn.execute(f"SELECT {_READING_COLUMNS} FROM readings r WHERE r.id = ?", (reading_id,)).fetchone()
+    return _reading(row) if row else None
 
 
 def list_devices(conn: sqlite3.Connection) -> list[dict]:

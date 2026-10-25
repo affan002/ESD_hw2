@@ -19,7 +19,7 @@ def test_injected_error_returns_500_and_stores_nothing_then_delete_recovers(clie
     assert client.put("/admin/faults", json={"error_every_n": 1}).status_code == 200
     resp = client.post("/readings", json=reading())
     assert resp.status_code == 500
-    assert resp.json() == {"detail": "injected fault"}
+    assert resp.json()["status"] == 500 and resp.json()["detail"] == "injected fault"
     assert stored_count(client) == 0
     assert any(getattr(r, "fault", None) == "error" for r in caplog.records)
 

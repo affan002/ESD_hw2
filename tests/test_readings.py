@@ -1,3 +1,4 @@
+import itertools
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -6,10 +7,15 @@ import pytest
 from app import db
 
 
+_ms = itertools.count()
+
+
 def reading(**overrides):
+    """A valid reading. Each call gets a distinct timestamp (1 ms apart), so two calls
+    are two different readings, not an idempotent repeat."""
     body = {
         "device_id": "dev-001",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": (datetime.now(timezone.utc) - timedelta(seconds=10, milliseconds=next(_ms))).isoformat(),
         "temperature_c": 22.5,
         "humidity_pct": 45.0,
         "battery_pct": 88.0,
@@ -73,14 +79,21 @@ def test_invalid_readings_are_rejected_and_not_stored(client, overrides, missing
         body.pop(missing)
     resp = client.post("/readings", json=body)
     assert resp.status_code == 422
-    assert "detail" in resp.json()
+    assert resp.headers["content-type"] == "application/problem+json"
+    problem = resp.json()
+    assert problem["status"] == 422 and problem["type"] == "urn:sensor-api:problem:validation-error"
+    assert problem["errors"] and problem["request_id"] == resp.headers["x-request-id"]
     assert stored_count(client) == 0
 
 
 def test_future_timestamp_error_type(client):
     future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     resp = client.post("/readings", json=reading(timestamp=future))
-    assert resp.json()["detail"][0]["type"] == "timestamp_in_future"
+    assert resp.json()["errors"][0] == {
+        "field": "timestamp",
+        "type": "timestamp_in_future",
+        "message": "timestamp is more than 60s in the future",
+    }
 
 
 def test_rejection_is_logged_without_values(client, caplog):

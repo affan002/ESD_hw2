@@ -1215,3 +1215,34 @@ The second run's `before` already shows **101** historical series left from the 
 
 The screenshot is `e_prometheus_series_count.png`.
 
+
+
+---
+
+# Assignment 2
+
+Stage evidence for A2. Full outputs are in `docs/results/`; decisions in `docs/DECISIONS.md`.
+
+## A2-A. HTTP API (2026-10-25)
+
+- Built: problem+json errors (`app/problems.py`), shared ingest rule (`app/ingest.py`), idempotent insert with unique index `(device_id, recorded_at)`, per-device token bucket (`app/ratelimit.py`), `GET /readings/{id}` + `Location`, validated `device_id` path params, committed OpenAPI (`docs/openapi.json`), `clients/http_caller.py`.
+- `.venv/bin/pytest -q` → `102 passed`.
+- `python -m clients.http_caller --demo` → success, retry after a 500, three timeouts then `breaker: closed -> open`, three blocked calls, half-open trial closes it (`a_caller_demo.txt`). Server log for the timed-out call: stored once (reading 6253), both retries `reading_replayed` (`a_caller_call5_server_log.txt`).
+- `scripts/rate_limit_demo.sh` → 5 × 201, 2 × 429 `Retry-After: 1`, 201 after 1 s (`a_rate_limit_demo.txt`).
+- `scripts/http_examples.sh` → 201 / 200 replay / 409 / 422 (`a_http_examples.txt`).
+
+## A2-B. gRPC (2026-10-25)
+
+- Built: `proto/sensor_ingest.proto`, `scripts/gen_proto.sh`, `app/grpc_server.py` (interceptor + servicer), Compose service `grpc`, `clients/grpc_caller.py`, Filebeat match + index-template fields (`docker compose run --rm logs-setup`, then `POST sensor-logs/_rollover` so the new mapping applies now).
+- `.venv/bin/pytest -q tests/test_grpc.py` → `7 passed` (incl. HTTP-stored reading replayed over gRPC).
+- `scripts/both_transports.sh` → HTTP 201/422, gRPC OK/INVALID_ARGUMENT; request ID `trace-214846` logged by both `sensor-api` and `sensor-grpc` (`b_both_transports.txt`). Elasticsearch: `{sensor-api: 3, sensor-grpc: 2}` documents for that ID.
+
+## A2-C. Metrics (2026-10-25)
+
+- Built: `sensor_grpc_*` metrics, `transport` label and `replayed`/`conflict` outcomes, `sensor_rate_limited_total`, DB write Summary → Histogram, Prometheus job `sensor-grpc`, Grafana row "Submit a reading: HTTP vs gRPC" (panels 30–36).
+- Targets: `node up · prometheus up · sensor-api up · sensor-grpc up`.
+- `scripts/a2_traffic.py --rounds 150` → HTTP `{200:150, 201:225, 409:50, 422:150, 429:30}`, gRPC `{OK:375, INVALID_ARGUMENT:150, ALREADY_EXISTS:50, RESOURCE_EXHAUSTED:30}` (`c_traffic_run.txt`).
+- First run, at 16:53:51Z, `[2m]`: HTTP p50 20.8 ms / p95 36.0 ms; gRPC p50 4.5 ms / p95 33.5 ms; DB write p95 32.5 ms (included replay lookups, fixed later).
+- Refreshed after the code-review fixes, run 17:13:01–17:15:35Z, evaluated at 17:15:35Z `[2m]`: HTTP p50 11.4 / p95 25.3 ms; gRPC p50 3.7 / p95 9.6 ms; DB write p95 by process: sensor-api 20.1 ms (5.4 writes/s), sensor-grpc 9.5 ms (1.5 writes/s) (`c_prometheus_numbers.txt`). Same client counts as the first run. Grafana panels and Prometheus targets recaptured for this window.
+- `.venv/bin/pytest -q` → `109 passed`.
+- Code-review fixes (caller reports 4xx as REFUSED; schema tolerates pre-A2 duplicates; one problem type for 500; DB write timed only on real writes; shared rate-limit and field-name helpers; spec reads the limit from settings) → `113 passed`; caller demo and rate-limit demo re-run.

@@ -3,8 +3,10 @@
 Conventions for this repo. Keep them consistent, and update this file only when a new convention is actually decided.
 
 ## Project
-- IoT sensor ingestion API, plus a device simulator. It's the base app for an observability assignment (Parts A–E).
-- **Parts A (API, dashboard and simulator), B (Prometheus, Grafana, Node Exporter), C (Filebeat → Elasticsearch → Kibana) and D (system design) are complete and verified.** Part E (the experiments) is complete: E1 (fault injection with a steady load) and E2 (a cardinality demo).
+- IoT sensor ingestion API, plus a device simulator. **Assignment 2 (HTTP APIs, gRPC, metrics)** extends the Assignment 1 observability project, which is frozen at tag `a1-submission` (repo `affan002/ESD_hw1`).
+- A2 parts: A (improve the HTTP API: error format, OpenAPI, idempotency, rate limiting, a Python caller with timeout/retry/circuit breaker), B (a gRPC service for one operation, sharing the business rules and database), C (extend the metrics for gRPC in Prometheus/Grafana).
+- A1 sections below describe what already exists; everything in them still applies unless an A2 decision changes it.
+- **Design decisions are the author's.** Each one is recorded in `docs/DECISIONS.md` (choice, reason, rejected alternative). Don't make a design choice that isn't recorded there; ask.
 - Living docs, updated stage by stage after each stage's done check passes:
   - `REPORT.md`: **concise**, answering exactly what each part of the assignment asks, in short paragraphs and tables. The style is `A. Project`, `B.1 …` numbered subsections, and conclusions with the key numbers only. Aim for about 50–100 lines per part. No stage-by-stage logs.
   - There is no walkthrough in the repo: the author's learning guide is private and not submitted. Don't link to it or recreate it.
@@ -44,7 +46,7 @@ Conventions for this repo. Keep them consistent, and update this file only when 
 - Compose service `api` → image `sensor-api:dev`, port **8000**. Compose service `simulator` reuses the same image and has no ports.
 - Compose service `prometheus` (`prom/prometheus:v3.15.0`) on port **9090**, with volume `prometheus-data` and 7-day retention.
   - Config: `monitoring/prometheus/prometheus.yml`, mounted read-only. It reloads with `curl -XPOST localhost:9090/-/reload` because `--web.enable-lifecycle` is on.
-  - Scrape interval **5 s**. Jobs: `sensor-api` → `api:8000` and `prometheus` → `localhost:9090`.
+  - Scrape interval **5 s**. Jobs: `sensor-api` → `api:8000`, `sensor-grpc` → `grpc:9101` and `prometheus` → `localhost:9090`.
   - Job `node` → `host.docker.internal:9100`. This needs `extra_hosts: host-gateway` on `prometheus`.
   - All monitoring config lives under `monitoring/`.
 - Compose service `node-exporter` (`prom/node-exporter:v1.12.1`) uses `network_mode: host`, `pid: host` and `/:/host:ro,rslave` with `--path.rootfs=/host`. It listens on **172.17.0.1:9100** only (not the LAN), and has no `ports:` entry because it's on the host network. From the host, use `curl 172.17.0.1:9100/metrics`. Don't move it onto the Compose network, or it will measure a container instead of the host.
@@ -58,12 +60,23 @@ Conventions for this repo. Keep them consistent, and update this file only when 
 - The healthcheck uses a Python urllib call to `/health`, because the slim image has no curl.
 
 ## Config (env vars)
-`DB_PATH` (default `./data/sensors.db`, `/data/sensors.db` in the container), `LOG_LEVEL` (INFO), `API_HOST` (0.0.0.0), `API_PORT` (8000), `STALE_AFTER_S` (30), `FUTURE_SKEW_S` (60).
+`DB_PATH` (default `./data/sensors.db`, `/data/sensors.db` in the container), `LOG_LEVEL` (INFO), `API_HOST` (0.0.0.0), `API_PORT` (8000), `STALE_AFTER_S` (30), `FUTURE_SKEW_S` (60), `RATE_LIMIT_BURST` (5), `RATE_LIMIT_PER_S` (1), `GRPC_PORT` (50051), `GRPC_METRICS_PORT` (9101).
+
+## A2 conventions (decided in docs/DECISIONS.md)
+- **Errors:** every error is RFC 9457 `application/problem+json` `{type, title, status, detail, instance, request_id, errors?}` (`app/problems.py`). `type` is `urn:sensor-api:problem:<slug>`. Raise `ProblemError(status, slug, detail, headers)` from routes; 422s go through the `RequestValidationError` handler and carry `errors: [{field, type, message}]`.
+- **Shared business rule:** `app/ingest.py: submit_reading()` is the only place that classifies and stores a reading; HTTP (`app/main.py`) and gRPC (`app/grpc_server.py`) both call it with `transport="http"|"grpc"`. Transport concerns (parsing, rate limit, faults, status mapping) stay in the callers.
+- **Idempotency:** `POST /readings` / `SubmitReading` are idempotent on `(device_id, recorded_at)` (unique index `ux_readings_device_recorded`): identical repeat → 200 / `replayed=true`; different values → 409 / `ALREADY_EXISTS`.
+- **Rate limit:** `app/ratelimit.py` token bucket per `device_id`, `RATE_LIMIT_BURST` (5) and `RATE_LIMIT_PER_S` (1); 429 + `Retry-After` (gRPC: `RESOURCE_EXHAUSTED` + `retry-after` trailing metadata). In-memory, per process. Tests set `RATE_LIMIT_BURST=1000` in `conftest.py` except `tests/test_rate_limit.py`.
+- **OpenAPI:** `docs/openapi.json` is generated by `scripts/export_openapi.py`; re-run it after any route change (`tests/test_openapi.py` enforces it). Declare error responses with `responses={code: {"model": Problem, …}}`; `_problem_openapi()` rewrites them to `application/problem+json`.
+- **gRPC:** `proto/sensor_ingest.proto` (package `sensor.v1`), generated into `app/grpc_gen/` by `scripts/gen_proto.sh` (committed; never edit by hand). Compose service `grpc` (same image, `127.0.0.1:50051`, metrics on `grpc:9101`, job `sensor-grpc`). `ObservabilityInterceptor` handles `x-request-id` metadata, the `grpc_request` log line and the `sensor_grpc_*` metrics. Log `service` is `sensor-grpc`.
+- **Callers:** `clients/http_caller.py` (timeout 2 s, 3 attempts, backoff, breaker 3 failures / 10 s) and `clients/grpc_caller.py` (deadline 2 s). Request IDs `cli-<12 hex>`; demo scripts use `ex-`, `rl-`, `b-…`, `trace-…`, `traffic-…`.
+- **Screenshots for A2** go in `docs/screenshots/a2/` (`scripts/capture_a2_screenshots.sh`); raw outputs in `docs/results/` (`a_…`, `b_…`, `c_…`).
 
 ## Routes (current)
 - `GET /` (dashboard), `/static/*`
 - `GET /health`
-- `POST /readings`
+- `POST /readings` (201 + `Location`; 200 replay; 409; 422; 429)
+- `GET /readings/{reading_id}`
 - `GET /devices[?status=]`
 - `GET /devices/{device_id}`
 - `GET /devices/{device_id}/readings[?limit=&anomalies_only=]`
@@ -73,7 +86,7 @@ Conventions for this repo. Keep them consistent, and update this file only when 
   - Faults apply only to `POST /readings`, via `faults.apply()` at the top of the handler, after body validation.
   - The state is in memory (`app.state.faults`), so a restart resets it. It's deterministic (every Nth request), never random.
   - Log events: `fault_config_changed` (WARNING) and `fault_injected` (`fault=delay` at WARNING with `delay_ms`, or `fault=error` at ERROR).
-- Lists wrap their items in an object (`{"count","devices"}`, `{"device_id","readings"}`, `{"readings"}`), never a bare array. `limit` is always 1–500 with a default of 50 (the `Limit` alias in `main.py`). Unknown devices return `404 {"detail":"device not found"}`.
+- Lists wrap their items in an object (`{"count","devices"}`, `{"device_id","readings"}`, `{"readings"}`), never a bare array. `limit` is always 1–500 with a default of 50 (the `Limit` alias in `main.py`). `device_id` path params are validated (`DeviceId` alias: malformed → 422). Unknown devices return a 404 problem with `detail: "device not found"`.
 
 ## API conventions
 - Routes use plural nouns and no verbs: `/readings`, `/devices`, `/anomalies`. Operator controls go under `/admin/*`.
@@ -129,10 +142,12 @@ Conventions for this repo. Keep them consistent, and update this file only when 
 - HTTP metrics are recorded in `RequestContextMiddleware`, not in handlers.
 - Latency histogram buckets are dense from 10 to 40 ms, where normal `POST /readings` latency sits. `histogram_quantile` interpolates inside a bucket, and coarse buckets overestimated p99 by 74 % (docs/BUILD_LOG.md, stage B7). If you change the buckets, re-run the logs-vs-histogram check, and keep bounds at 25 ms and 100 ms because the Apdex panel uses them (T and 4T).
 - Business metrics are recorded where the event happens:
-  - `sensor_readings_total{outcome=normal|anomaly|rejected|failed}` (handler and validation handler)
+  - `sensor_readings_total{transport=http|grpc, outcome=normal|anomaly|replayed|conflict|rejected|failed}` (`app/ingest.py`)
+  - `sensor_rate_limited_total{route}` (`/readings` or `SubmitReading`)
+  - `sensor_grpc_requests_total{method,code}`, `sensor_grpc_request_duration_seconds{method}` (same `LATENCY_BUCKETS` as HTTP), `sensor_grpc_requests_in_progress{method}` (interceptor)
   - `sensor_reading_validation_errors_total{field,reason}`, where `field` goes through `metrics.validation_field()` so it's always one of the 5 fields or `body`
   - `sensor_anomalies_total{reason}`
-  - `sensor_db_write_duration_seconds` (the Summary, wrapping `db.insert_reading`)
+  - `sensor_db_write_duration_seconds` (a Histogram since A2, wrapping `db.insert_reading`; two processes write)
   - `sensor_faults_injected_total{fault}` and `sensor_fault_active{fault}` (in `app/faults.py`)
 - `sensor_devices{status}` comes from `DeviceStatusCollector`, which runs at scrape time using the same `compute_status()` as the API. `create_app()` calls `metrics.DEVICE_STATUS.configure(settings)`. Never keep a separate running device count.
 - Create every known label combination at startup (see the loop in `metrics.py`), so series exist at 0.
@@ -144,7 +159,7 @@ Conventions for this repo. Keep them consistent, and update this file only when 
 - Ports: Elasticsearch **127.0.0.1:9200**, Kibana **127.0.0.1:5601**. They're bound to localhost because security is off (`xpack.security.enabled=false`). Never publish them on 0.0.0.0.
 - Elasticsearch is a single node with heap `-Xms512m -Xmx512m` and volume `es-data`. The whole stack needs about 3.5 GB of RAM (Kibana about 1.7 GB), and `docker compose stop kibana` doesn't stop ingestion.
 - **Config lives in `monitoring/`:**
-  - `filebeat/filebeat.yml`: Docker autodiscover on `container.name` regexp `^esd_hw1-(api|simulator)-[0-9]+$`. Label conditions don't match, because Filebeat nests the dotted label keys. The `container` parser unwraps Docker's envelope; the processors run `copy_fields` → `decode_json_fields` → `timestamp` → `drop_fields`.
+  - `filebeat/filebeat.yml`: Docker autodiscover on `container.name` regexp `^esd_hw2-(api|simulator)-[0-9]+$` (the Compose project is pinned by `name: esd_hw2`). Label conditions don't match, because Filebeat nests the dotted label keys. The `container` parser unwraps Docker's envelope; the processors run `copy_fields` → `decode_json_fields` → `timestamp` → `drop_fields`.
   - `elasticsearch/index-template.json`: data stream `sensor-logs`, pattern `sensor-logs*`, 1 shard / 0 replicas, `dynamic: false` with explicit types.
   - `elasticsearch/ilm-policy.json`: `sensor-logs-policy`.
   - `kibana/saved-objects.ndjson`: data view id `sensor-logs` and the saved searches, with ids `sensor-<slug>`.

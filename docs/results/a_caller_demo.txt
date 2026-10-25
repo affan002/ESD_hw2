@@ -1,0 +1,42 @@
+22:08:41.834 settings: timeout 2 s · 3 attempts · backoff 0.2 s doubling + <=0.1 s jitter · breaker opens after 3 failures, trial after 10 s
+22:08:41.844 == 1. healthy API
+22:08:41.844 call 1
+22:08:41.852   attempt 1 [cli-ea677d443eae]: HTTP 201 in 7 ms
+22:08:41.852   -> OK: HTTP 201, /readings/6249
+22:08:42.852 call 2
+22:08:42.879   attempt 1 [cli-1032df5c4a68]: HTTP 201 in 27 ms
+22:08:42.880   -> OK: HTTP 201, /readings/6250
+22:08:43.880 == 2. transient failure: every 2nd request returns 500 (PUT /admin/faults error_every_n=2)
+22:08:43.884 call 3
+22:08:43.891   attempt 1 [cli-3753e83d6dc0]: HTTP 201 in 7 ms
+22:08:43.891   -> OK: HTTP 201, /readings/6251
+22:08:44.891 call 4
+22:08:44.901   attempt 1 [cli-5a9bcc480fe9]: HTTP 500
+22:08:44.902   retrying in 0.28 s
+22:08:45.209   attempt 2 [cli-5a9bcc480fe9]: HTTP 201 in 27 ms
+22:08:45.210   -> OK: HTTP 201, /readings/6252
+22:08:46.210 == 3. API hangs: every request delayed 3 s, longer than the 2 s timeout
+22:08:46.217 call 5
+22:08:48.221   attempt 1 [cli-e6ed98d37397]: timeout after 2 s
+22:08:48.222   retrying in 0.27 s
+22:08:50.494   attempt 2 [cli-e6ed98d37397]: timeout after 2 s
+22:08:50.494   retrying in 0.49 s
+22:08:52.984   attempt 3 [cli-e6ed98d37397]: timeout after 2 s
+22:08:52.984   breaker: closed -> open
+22:08:52.985   -> FAILED: 3 attempts failed, last: timeout after 2 s
+22:08:53.985 call 6
+22:08:53.986   -> FAILED: circuit open, not sent; trial allowed in 9.0 s
+22:08:54.986 call 7
+22:08:54.987   -> FAILED: circuit open, not sent; trial allowed in 8.0 s
+22:08:55.987 call 8
+22:08:55.988   -> FAILED: circuit open, not sent; trial allowed in 7.0 s
+22:08:55.988 == 4. API recovers (DELETE /admin/faults); wait for the breaker's recovery period
+22:09:03.085 call 9 (half-open trial)
+22:09:03.085   breaker: open -> half_open
+22:09:03.106   breaker: half_open -> closed
+22:09:03.106   attempt 1 [cli-13e66187f1f4]: HTTP 201 in 20 ms
+22:09:03.106   -> OK: HTTP 201, /readings/6254
+22:09:03.106 call 10
+22:09:03.120   attempt 1 [cli-3cc81a7b2abc]: HTTP 201 in 14 ms
+22:09:03.120   -> OK: HTTP 201, /readings/6255
+22:09:03.131 device dev-900 gained 7 readings in this run: calls 1-4, 9, 10, plus call 5's first attempt, which the server stored after the client had timed out (its retries were replays, not duplicates)

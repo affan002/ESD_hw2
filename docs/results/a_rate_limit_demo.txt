@@ -1,0 +1,11 @@
+22:09:17.549 request 1 -> 201
+22:09:17.606 request 2 -> 201
+22:09:17.660 request 3 -> 201
+22:09:17.718 request 4 -> 201
+22:09:17.767 request 5 -> 201
+22:09:17.789 request 6 -> 429  Retry-After: 1
+22:09:17.809 request 7 -> 429  Retry-After: 1
+--- 429 body:
+{"type":"urn:sensor-api:problem:rate-limited","title":"Too Many Requests","status":429,"detail":"device dev-901 is over its limit (a burst of 5 readings per device, refilled at 1 per second); retry in 1 s","instance":"/readings","request_id":"rl-7"}
+--- sleeping 1 s (Retry-After)
+22:09:18.816 request 8 -> 201

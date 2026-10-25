@@ -58,3 +58,24 @@ class DeviceReadings(BaseModel):
 
 class AnomalyList(BaseModel):
     readings: list[ReadingOut]
+
+
+class ProblemFieldError(BaseModel):
+    field: str = Field(description="e.g. humidity_pct, or path.device_id for a path parameter")
+    type: str = Field(description="Pydantic error type, e.g. less_than_equal, missing, timestamp_in_future")
+    message: str
+
+
+class Problem(BaseModel):
+    """RFC 9457 problem details: the body of every error response (application/problem+json)."""
+
+    type: str = Field(
+        description="Stable identifier of the problem kind, e.g. urn:sensor-api:problem:validation-error, "
+        ":reading-conflict, :rate-limited, :not-found, :internal-error"
+    )
+    title: str = Field(description="HTTP status phrase, e.g. Conflict")
+    status: int = Field(description="HTTP status code, repeated in the body")
+    detail: str = Field(description="What went wrong for this request, in words")
+    instance: str = Field(description="Path of the request that failed")
+    request_id: str | None = Field(description="Same value as the X-Request-ID response header; search the logs for it")
+    errors: list[ProblemFieldError] | None = Field(default=None, description="Field-level errors (422 only)")

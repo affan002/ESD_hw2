@@ -43,7 +43,8 @@ def test_get_device_returns_latest_reading_and_counts(client):
 
 def test_unknown_device_is_404(client):
     assert client.get("/devices/dev-999").status_code == 404
-    assert client.get("/devices/dev-999").json() == {"detail": "device not found"}
+    problem = client.get("/devices/dev-999").json()
+    assert (problem["status"], problem["title"], problem["detail"]) == (404, "Not Found", "device not found")
     assert client.get("/devices/dev-999/readings").status_code == 404
 
 

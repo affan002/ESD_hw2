@@ -14,13 +14,13 @@ filebeat.autodiscover:
   providers:
     - type: docker
       templates:
-        # Match only this project's api and simulator containers by name.
-        # Compose names containers <project>-<service>-<n>, e.g. esd_hw1-api-1.
+        # Match only this project's api, grpc and simulator containers by name.
+        # Compose names containers <project>-<service>-<n>, e.g. esd_hw2-api-1.
         # (Label conditions don't work reliably here: Filebeat nests the dotted
         # compose label keys, e.g. container.labels.com.docker.compose.project.value.)
         - condition:
             regexp:
-              container.name: "^esd_hw1-(api|simulator)-[0-9]+$"
+              container.name: "^esd_hw2-(api|grpc|simulator)-[0-9]+$"
           config:
             - type: filestream
               id: container-${data.docker.container.id}

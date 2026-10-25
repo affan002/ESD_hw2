@@ -7,3 +7,6 @@ data/
 *.db
 *.db-wal
 *.db-shm
+
+# Private learning guide (never submitted)
+docs/WALKTHROUGH.md

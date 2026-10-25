@@ -81,5 +81,9 @@ def test_unhandled_exception_returns_500_with_request_id(tmp_path, monkeypatch, 
         resp = c.get("/boom", headers={"X-Request-ID": "crash-1"})
     assert resp.status_code == 500
     assert resp.headers["x-request-id"] == "crash-1"
+    # same problem type as any other 500 (e.g. an injected fault)
+    assert resp.headers["content-type"] == "application/problem+json"
+    assert resp.json()["type"] == "urn:sensor-api:problem:internal-server-error"
+    assert resp.json()["request_id"] == "crash-1"
     events = [getattr(r, "event", None) for r in caplog.records]
     assert "unhandled_exception" in events

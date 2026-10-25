@@ -71,7 +71,7 @@ from tests.test_readings import reading  # noqa: E402
 
 
 def outcomes():
-    return {o: sample("sensor_readings_total", outcome=o) for o in ("normal", "anomaly", "rejected", "failed")}
+    return {o: sample("sensor_readings_total", transport="http", outcome=o) for o in ("normal", "anomaly", "rejected", "failed")}
 
 
 def delta(before, after):
@@ -80,8 +80,9 @@ def delta(before, after):
 
 def test_all_outcome_and_reason_series_exist_at_zero(client):
     text = client.get("/metrics").text
-    for outcome in ("normal", "anomaly", "rejected", "failed"):
-        assert f'sensor_readings_total{{outcome="{outcome}"}}' in text
+    for transport in ("http", "grpc"):
+        for outcome in ("normal", "anomaly", "replayed", "conflict", "rejected", "failed"):
+            assert f'sensor_readings_total{{outcome="{outcome}",transport="{transport}"}}' in text
     for reason in ("temperature_low", "temperature_high", "humidity_low", "humidity_high", "battery_low"):
         assert f'sensor_anomalies_total{{reason="{reason}"}}' in text
 
@@ -118,7 +119,7 @@ def test_validation_errors_labelled_by_bounded_field_and_reason(client):
     assert sample("sensor_reading_validation_errors_total", field="body", reason="json_invalid") - body == 1
 
 
-def test_db_write_summary_observes_stored_readings_only(client):
+def test_db_write_histogram_observes_stored_readings_only(client):
     count = sample("sensor_db_write_duration_seconds_count")
     total = sample("sensor_db_write_duration_seconds_sum")
     client.post("/readings", json=reading())

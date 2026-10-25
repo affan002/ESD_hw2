@@ -37,17 +37,25 @@ def main() -> int:
     p.add_argument("--rate", type=float, default=5.0, help="requests per second")
     p.add_argument("--duration", type=float, default=150.0, help="seconds")
     p.add_argument("--stage", default="run", help="used in request ids: load-<stage>-NNNNN")
-    p.add_argument("--device", default="dev-100")
+    p.add_argument("--device", default="dev-100", help="first device id; see --devices")
+    p.add_argument(
+        "--devices", type=int, default=20,
+        help="spread requests round-robin over this many devices (dev-100, dev-101, …). The API rate-limits "
+             "each device to a burst of 5 then 1/s, so keep rate/devices <= 1 to avoid 429s",
+    )
     p.add_argument("--timeout", type=float, default=5.0, help="client timeout per request, seconds")
     p.add_argument("--out", help="also write the JSON summary to this file")
     args = p.parse_args()
 
+    first_device = int(args.device.removeprefix("dev-"))
+    if args.devices < 1 or first_device + args.devices - 1 > 999:
+        p.error(f"--device {args.device} with --devices {args.devices} goes past dev-999 (device ids have 3 digits)")
     results: list[tuple[int, float]] = []
     lock = threading.Lock()
 
     def send(n: int) -> None:
         body = json.dumps({
-            "device_id": args.device,
+            "device_id": f"dev-{first_device + n % args.devices:03d}",
             "timestamp": utc(time.time()),
             "temperature_c": 22.0,
             "humidity_pct": 45.0,

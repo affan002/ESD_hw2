@@ -1,0 +1,27 @@
+### 1. valid reading
+HTTP/1.1 201 Created
+content-type: application/json
+location: /readings/484
+x-request-id: ex-11323
+{"id":484,"device_id":"dev-902","timestamp":"2026-10-25T16:44:17.155Z","received_at":"2026-10-25T16:44:17.181Z","temperature_c":22.5,"humidity_pct":45.0,"battery_pct":88.0,"is_anomaly":false,"anomaly_reasons":[]}
+
+### 2. same request repeated (a retry)
+HTTP/1.1 200 OK
+content-type: application/json
+location: /readings/484
+idempotent-replayed: true
+x-request-id: ex-17420
+{"id":484,"device_id":"dev-902","timestamp":"2026-10-25T16:44:17.155Z","received_at":"2026-10-25T16:44:17.181Z","temperature_c":22.5,"humidity_pct":45.0,"battery_pct":88.0,"is_anomaly":false,"anomaly_reasons":[]}
+
+### 3. same device and timestamp, different temperature
+HTTP/1.1 409 Conflict
+content-type: application/problem+json
+x-request-id: ex-4149
+{"type":"urn:sensor-api:problem:reading-conflict","title":"Conflict","status":409,"detail":"device dev-902 already has a different reading at 2026-10-25T16:44:17.155Z (reading 484)","instance":"/readings","request_id":"ex-4149"}
+
+### 4. invalid: humidity 150 % and a bad device id
+HTTP/1.1 422 Unprocessable Entity
+content-type: application/problem+json
+x-request-id: ex-11081
+{"type":"urn:sensor-api:problem:validation-error","title":"Unprocessable Entity","status":422,"detail":"the request has invalid fields; see errors","instance":"/readings","request_id":"ex-11081","errors":[{"field":"device_id","type":"string_pattern_mismatch","message":"String should match pattern '^dev-\\d{3}$'"},{"field":"humidity_pct","type":"less_than_equal","message":"Input should be less than or equal to 100"}]}
+

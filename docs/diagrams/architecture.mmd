@@ -1,4 +1,4 @@
-%% Architecture of the sensor ingestion stack (Part D).
+%% Architecture of the sensor ingestion stack (A1 Part D, extended in A2 with the gRPC service).
 %% Source of truth for docs/diagrams/architecture.svg / .png; rendered by
 %% scripts/render_diagram.sh. Every arrow matches docker-compose.yml and the
 %% configs in monitoring/. Failure behaviour is in REPORT.md D.2, not here.
@@ -6,11 +6,16 @@ flowchart LR
     subgraph clients["Clients"]
         SIM["simulator<br/>20 devices · 4 readings/s"]
         USER["browser<br/>operator dashboard"]
+        CLI["Python callers<br/>http_caller · grpc_caller"]
     end
 
     subgraph app["sensor-api (FastAPI, :8000)"]
         API["HTTP: /readings, /devices, /anomalies,<br/>/admin/faults, /health, /metrics"]
         DB[("SQLite<br/>sensors.db")]
+    end
+
+    subgraph grpcsvc["sensor-grpc (:50051)"]
+        GRPC["gRPC: SubmitReading<br/>metrics on :9101"]
     end
 
     subgraph metrics["Metrics"]
@@ -22,7 +27,7 @@ flowchart LR
 
     subgraph logs["Logs"]
         DLOG[("Docker json-file<br/>3 × 10 MB")]
-        FB["Filebeat<br/>autodiscover api + simulator"]
+        FB["Filebeat<br/>autodiscover api + grpc + simulator"]
         ES[("Elasticsearch :9200<br/>sensor-logs · ILM ≈ 1 h")]
         KB["Kibana :5601<br/>data view sensor-logs"]
     end
@@ -32,6 +37,11 @@ flowchart LR
     SIM -- "POST /readings" --> API
     USER -- "JSON over HTTP" --> API
     API --- DB
+    CLI -- "POST /readings" --> API
+    CLI -- "gRPC SubmitReading" --> GRPC
+    GRPC -- "same rules (app/ingest.py)" --- DB
+    PROM -- "GET /metrics" --> GRPC
+    GRPC -- "stdout" --> DLOG
     PROM -- "GET /metrics every 5 s" --> API
     PROM -- "GET /metrics" --> NODE
     GRAF -- "PromQL" --> PROM

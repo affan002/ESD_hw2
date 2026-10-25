@@ -1,0 +1,44 @@
+// gRPC version of the "submit a reading" task (HTTP: POST /readings).
+// The server (app/grpc_server.py) calls the same business rule as HTTP
+// (app/ingest.py: submit_reading) and writes to the same SQLite database.
+// Regenerate the Python code with: scripts/gen_proto.sh
+syntax = "proto3";
+
+package sensor.v1;
+
+service IngestService {
+  // Store one reading. Idempotent on (device_id, timestamp): an identical repeat
+  // returns the stored reading with replayed = true.
+  // Errors: INVALID_ARGUMENT (bad or missing field, timestamp in the future),
+  // ALREADY_EXISTS (same device and timestamp, different values),
+  // RESOURCE_EXHAUSTED (per-device rate limit), INTERNAL (server error).
+  rpc SubmitReading(SubmitReadingRequest) returns (SubmitReadingResponse);
+}
+
+message SubmitReadingRequest {
+  string device_id = 1;  // ^dev-\d{3}$
+  // Device clock, ISO-8601 with a timezone, e.g. 2026-10-25T10:00:00.000Z. A string
+  // (not google.protobuf.Timestamp) so that the same validator as HTTP checks it.
+  string timestamp = 2;
+  // `optional` gives presence: without it a missing value would silently arrive as 0.0.
+  optional double temperature_c = 3;
+  optional double humidity_pct = 4;
+  optional double battery_pct = 5;
+}
+
+message Reading {
+  int64 id = 1;
+  string device_id = 2;
+  string timestamp = 3;
+  string received_at = 4;
+  double temperature_c = 5;
+  double humidity_pct = 6;
+  double battery_pct = 7;
+  bool is_anomaly = 8;
+  repeated string anomaly_reasons = 9;
+}
+
+message SubmitReadingResponse {
+  Reading reading = 1;
+  bool replayed = 2;  // true: an identical reading was already stored; nothing new was written
+}

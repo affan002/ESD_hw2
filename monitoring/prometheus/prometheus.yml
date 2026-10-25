@@ -15,6 +15,13 @@ scrape_configs:
     static_configs:
       - targets: ["api:8000"]
 
+  # The gRPC server (A2 Part B): gRPC call metrics plus its own ingestion and
+  # process metrics, served by prometheus_client on a separate HTTP port.
+  - job_name: sensor-grpc
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["grpc:9101"]
+
   # Node Exporter runs on the host network (see docker-compose.yml), so it is
   # reached through the Docker host gateway rather than by service name.
   - job_name: node

@@ -464,12 +464,463 @@
     },
     {
       "type": "row",
+      "id": 30,
+      "title": "Submit a reading: HTTP vs gRPC (A2)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 31,
+      "title": "HTTP calls per minute by status \u00b7 POST /readings",
+      "description": "Requests in the last minute, by HTTP status: increase(sensor_http_requests_total[1m]). Measured on the server (RequestContextMiddleware).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (status_code) (increase(sensor_http_requests_total{route=\"/readings\",method=\"POST\"}[1m]))",
+          "legendFormat": "HTTP {{status_code}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisSoftMin": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 32,
+      "title": "gRPC calls per minute by status \u00b7 SubmitReading",
+      "description": "Calls in the last minute, by RPC method and gRPC status code: increase(sensor_grpc_requests_total[1m]). Measured on the server (ObservabilityInterceptor in app/grpc_server.py).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 6,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (method, code) (increase(sensor_grpc_requests_total[1m]))",
+          "legendFormat": "{{method}} {{code}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisSoftMin": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 33,
+      "title": "Error rate \u00b7 HTTP vs gRPC",
+      "description": "Share of calls that did not succeed over the last minute: non-2xx for HTTP, non-OK for gRPC. Includes client errors (422/INVALID_ARGUMENT, 409/ALREADY_EXISTS, 429/RESOURCE_EXHAUSTED) as well as server errors (5xx/INTERNAL); the panels on the left show which.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 6,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(sensor_http_requests_total{route=\"/readings\",method=\"POST\",status_code!~\"2..\"}[1m])) / sum(rate(sensor_http_requests_total{route=\"/readings\",method=\"POST\"}[1m]))",
+          "legendFormat": "HTTP",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(sensor_grpc_requests_total{code!=\"OK\"}[1m])) / sum(rate(sensor_grpc_requests_total[1m]))",
+          "legendFormat": "gRPC",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisSoftMin": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 34,
+      "title": "Latency p50 / p95 \u00b7 HTTP vs gRPC (window 1m)",
+      "description": "Server-side duration percentiles over a 1-minute window: histogram_quantile(q, sum by (le) (rate(<histogram>_bucket[1m]))). Both histograms use the same bucket bounds (app/metrics.py LATENCY_BUCKETS), so the two are directly comparable. Interpolated inside buckets, so read them as estimates.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(sensor_http_request_duration_seconds_bucket{route=\"/readings\",method=\"POST\"}[1m])))",
+          "legendFormat": "HTTP p50",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sensor_http_request_duration_seconds_bucket{route=\"/readings\",method=\"POST\"}[1m])))",
+          "legendFormat": "HTTP p95",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(sensor_grpc_request_duration_seconds_bucket{method=\"SubmitReading\"}[1m])))",
+          "legendFormat": "gRPC p50",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sensor_grpc_request_duration_seconds_bucket{method=\"SubmitReading\"}[1m])))",
+          "legendFormat": "gRPC p95",
+          "refId": "D",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisSoftMin": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 35,
+      "title": "Calls in flight \u00b7 HTTP vs gRPC",
+      "description": "Calls being handled right now (gauges sampled every 5 s). Chosen over message size because SubmitReading messages are a constant ~100 bytes; in-flight shows calls piling up when the server slows down. The HTTP gauge counts every route.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(sensor_http_requests_in_progress)",
+          "legendFormat": "HTTP (all routes)",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(sensor_grpc_requests_in_progress{method=\"SubmitReading\"})",
+          "legendFormat": "gRPC SubmitReading",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisSoftMin": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 36,
+      "title": "Rate-limited and repeated submissions per minute",
+      "description": "Refused by the per-device rate limiter (sensor_rate_limited_total, 429 / RESOURCE_EXHAUSTED), and idempotent repeats (replayed) or conflicting repeats (conflict) by transport (sensor_readings_total). These were invisible in A1.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 14,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (route) (increase(sensor_rate_limited_total[1m]))",
+          "legendFormat": "rate-limited {{route}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (transport, outcome) (increase(sensor_readings_total{outcome=~\"replayed|conflict\"}[1m]))",
+          "legendFormat": "{{outcome}} {{transport}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false,
+            "axisSoftMin": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
       "id": 8,
       "title": "Application: traffic, errors, latency",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 22,
         "w": 24,
         "h": 1
       },
@@ -486,7 +937,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 6,
+        "y": 23,
         "w": 12,
         "h": 8
       },
@@ -548,7 +999,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 6,
+        "y": 23,
         "w": 12,
         "h": 8
       },
@@ -632,7 +1083,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 14,
+        "y": 31,
         "w": 8,
         "h": 8
       },
@@ -740,7 +1191,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 14,
+        "y": 31,
         "w": 8,
         "h": 8
       },
@@ -795,15 +1246,15 @@
     {
       "type": "timeseries",
       "id": 13,
-      "title": "DB write time (average) \u00b7 Summary",
-      "description": "Average time to store one reading in SQLite: rate(_sum) / rate(_count) of the sensor_db_write_duration_seconds Summary. Python summaries have no quantiles, only count and sum.",
+      "title": "DB write time \u00b7 Histogram (API + gRPC)",
+      "description": "Time to store one reading in SQLite, across both processes that write (API and gRPC server): average = sum(rate(_sum)) / sum(rate(_count)); p95 from the buckets. A2 changed this from a Summary, which can't be aggregated across processes, to a Histogram.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "x": 16,
-        "y": 14,
+        "y": 31,
         "w": 8,
         "h": 8
       },
@@ -813,9 +1264,20 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(sensor_db_write_duration_seconds_sum[1m]) / rate(sensor_db_write_duration_seconds_count[1m])",
+          "expr": "sum(rate(sensor_db_write_duration_seconds_sum[1m])) / sum(rate(sensor_db_write_duration_seconds_count[1m]))",
           "legendFormat": "average",
           "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sensor_db_write_duration_seconds_bucket[1m])))",
+          "legendFormat": "p95",
+          "refId": "B",
           "range": true,
           "instant": false
         }
@@ -861,7 +1323,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 39,
         "w": 24,
         "h": 1
       },
@@ -878,7 +1340,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 40,
         "w": 12,
         "h": 8
       },
@@ -1001,7 +1463,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 23,
+        "y": 40,
         "w": 12,
         "h": 8
       },
@@ -1109,7 +1571,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 31,
+        "y": 48,
         "w": 8,
         "h": 8
       },
@@ -1171,7 +1633,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 31,
+        "y": 48,
         "w": 8,
         "h": 8
       },
@@ -1233,7 +1695,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 31,
+        "y": 48,
         "w": 8,
         "h": 8
       },
@@ -1291,7 +1753,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 39,
+        "y": 56,
         "w": 24,
         "h": 1
       },
@@ -1308,7 +1770,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 57,
         "w": 6,
         "h": 8
       },
@@ -1372,7 +1834,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 40,
+        "y": 57,
         "w": 6,
         "h": 8
       },
@@ -1435,7 +1897,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 40,
+        "y": 57,
         "w": 6,
         "h": 8
       },
@@ -1499,7 +1961,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 40,
+        "y": 57,
         "w": 6,
         "h": 8
       },

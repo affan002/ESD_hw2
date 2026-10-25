@@ -1,0 +1,27 @@
+%% A2 Part B: the two call paths for "submit a reading". Rendered by
+%% scripts/render_diagram.sh docs/diagrams/call-paths.mmd. Both paths end in
+%% the same function (app/ingest.py) and the same SQLite database.
+flowchart LR
+    subgraph httppath["HTTP path (container api, :8000)"]
+        HC["clients/http_caller.py<br/>httpx · timeout · retry · breaker"]
+        UV["uvicorn + FastAPI"]
+        MW["RequestContextMiddleware<br/>X-Request-ID · access log · HTTP metrics"]
+        RT["route create_reading<br/>ReadingIn validation · rate limit · faults"]
+    end
+
+    subgraph grpcpath["gRPC path (container grpc, :50051)"]
+        GC["clients/grpc_caller.py<br/>deadline · x-request-id metadata"]
+        STUB["IngestServiceStub<br/>(generated, sensor_ingest_pb2_grpc.py)"]
+        GS["grpc.server"]
+        IC["ObservabilityInterceptor<br/>request ID · access log · gRPC metrics"]
+        SV["IngestServicer.SubmitReading<br/>(implements generated base class)<br/>ReadingIn validation · rate limit"]
+    end
+
+    ING["app/ingest.py submit_reading<br/>future check · anomaly rule · idempotency"]
+    DB[("SQLite sensors.db<br/>shared volume sensor-data")]
+
+    HC -- "POST /readings JSON" --> UV --> MW --> RT
+    GC --> STUB -- "HTTP/2 protobuf<br/>/sensor.v1.IngestService/SubmitReading" --> GS --> IC --> SV
+    RT -- "transport=http" --> ING
+    SV -- "transport=grpc" --> ING
+    ING -- "BEGIN IMMEDIATE … COMMIT" --> DB

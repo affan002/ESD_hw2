@@ -351,9 +351,10 @@ function showResult(node, kind, title, items = [], rid = null) {
   node.replaceChildren(...parts);
 }
 
-function validationItems(data) {
-  if (!data || !Array.isArray(data.detail)) return [];
-  return data.detail.map((e) => `${(e.loc || []).filter((p) => p !== "body").join(".") || "body"}: ${e.msg}`);
+// Errors are RFC 9457 problems: {type, title, status, detail, instance, request_id, errors?}.
+function validationItems(problem) {
+  if (!problem || !Array.isArray(problem.errors)) return [];
+  return problem.errors.map((e) => `${e.field}: ${e.message}`);
 }
 
 function numberOrRaw(value) {
@@ -374,18 +375,20 @@ async function sendReading(event) {
   };
   try {
     const res = await api("/readings", { method: "POST", body });
-    if (res.status === 201) {
+    if (res.status === 201 || res.status === 200) {
       const r = res.data;
+      // 200 = idempotent replay: this exact reading was already stored, nothing new written.
+      const stored = res.status === 201 ? "Stored" : "Already stored (replay)";
       if (r.is_anomaly) {
-        showResult(out, "warn", `201 Stored as anomaly (reading #${r.id}): ${r.anomaly_reasons.join(", ")}`, [], res.requestId);
+        showResult(out, "warn", `${res.status} ${stored} as anomaly (reading #${r.id}): ${r.anomaly_reasons.join(", ")}`, [], res.requestId);
       } else {
-        showResult(out, "ok", `201 Stored as normal (reading #${r.id})`, [], res.requestId);
+        showResult(out, "ok", `${res.status} ${stored} as normal (reading #${r.id})`, [], res.requestId);
       }
       refresh();
     } else if (res.status === 422) {
       showResult(out, "error", "422 Rejected, not stored", validationItems(res.data), res.requestId);
     } else {
-      showResult(out, "error", `${res.status} ${res.data?.detail ?? "Request failed"}`, [], res.requestId);
+      showResult(out, "error", `${res.status} ${res.data?.title ?? "Request failed"}: ${res.data?.detail ?? ""}`, [], res.requestId);
     }
   } catch {
     showResult(out, "error", "Could not reach the API");

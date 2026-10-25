@@ -12,6 +12,10 @@ class Settings:
     api_port: int
     stale_after_s: float
     future_skew_s: float
+    rate_limit_burst: int
+    rate_limit_per_s: float
+    grpc_port: int
+    grpc_metrics_port: int
 
 
 def load_settings() -> Settings:
@@ -22,4 +26,8 @@ def load_settings() -> Settings:
         api_port=int(os.getenv("API_PORT", "8000")),
         stale_after_s=float(os.getenv("STALE_AFTER_S", "30")),
         future_skew_s=float(os.getenv("FUTURE_SKEW_S", "60")),
+        rate_limit_burst=int(os.getenv("RATE_LIMIT_BURST", "5")),
+        rate_limit_per_s=float(os.getenv("RATE_LIMIT_PER_S", "1")),
+        grpc_port=int(os.getenv("GRPC_PORT", "50051")),
+        grpc_metrics_port=int(os.getenv("GRPC_METRICS_PORT", "9101")),
     )

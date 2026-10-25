@@ -1,24 +1,26 @@
 """ASGI middleware: assigns a request ID and writes one access-log line per request."""
 
+import json
 import logging
 import re
 import time
 import uuid
 
 from app import metrics
+from app.problems import MEDIA_TYPE, problem_body, slug_for
 from app.logging_setup import request_id_var
 
 log = logging.getLogger("app.http")
 
 REQUEST_ID_HEADER = b"x-request-id"
-_VALID_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+VALID_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
 def _incoming_request_id(scope) -> str:
     for name, value in scope.get("headers", []):
         if name == REQUEST_ID_HEADER:
             candidate = value.decode("latin-1")
-            if _VALID_REQUEST_ID.match(candidate):
+            if VALID_REQUEST_ID.match(candidate):
                 return candidate
             break
     return uuid.uuid4().hex
@@ -66,12 +68,11 @@ class RequestContextMiddleware:
                     {
                         "type": "http.response.start",
                         "status": 500,
-                        "headers": [(b"content-type", b"application/json")],
+                        "headers": [(b"content-type", MEDIA_TYPE.encode())],
                     }
                 )
-                await send_wrapper(
-                    {"type": "http.response.body", "body": b'{"detail":"internal server error"}'}
-                )
+                body = problem_body(500, slug_for(500), "internal server error", scope.get("path", ""))
+                await send_wrapper({"type": "http.response.body", "body": json.dumps(body).encode()})
         finally:
             duration_s = time.perf_counter() - start
             duration_ms = round(duration_s * 1000, 2)

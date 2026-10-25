@@ -2,7 +2,7 @@
 
 This service receives readings from simulated temperature, humidity and battery sensors. It validates each reading, stores it and flags anomalies. It's the base application for an observability assignment (Prometheus/Grafana metrics and Filebeat → Elasticsearch → Kibana logs).
 
-> Status: Part A (the API, the dashboard and the simulator), Part B (Prometheus, Grafana and Node Exporter metrics) and Part C (the Filebeat → Elasticsearch → Kibana log pipeline) are complete. Part D (system design) is documented in REPORT.md, with the architecture diagram in `docs/diagrams/`. Part E's experiments are reproducible with the scripts in `scripts/` (see *Experiments* below).
+> **Assignment 2** (HTTP APIs, gRPC, metrics) extends the Assignment 1 project (tag `a1-submission`). New in A2: one RFC 9457 error format, idempotent `POST /readings`, a per-device rate limit, a committed OpenAPI document, Python callers with timeout/retry/circuit breaker, a gRPC `SubmitReading` service in its own container, and gRPC metrics in Prometheus/Grafana. See [Assignment 2](#assignment-2) below and [REPORT.md](REPORT.md). Design decisions: [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ This service receives readings from simulated temperature, humidity and battery 
 - Your user must be able to talk to Docker without `sudo`. If you get `permission denied ... docker.sock`, run `sudo usermod -aG docker $USER`, then log out and back in.
 - Python 3.12. This is only needed to run the tests locally.
 - `curl`. `jq` is optional but useful.
-- Free ports on the host: **8000** (API and dashboard), **9090** (Prometheus), **3000** (Grafana), **9200** (Elasticsearch) and **5601** (Kibana). **All of them are bound to 127.0.0.1**, so they're reachable only from this machine, not from your network: there's no login on `/admin/faults`, Grafana or Elasticsearch. Node Exporter listens on port **9100** of Docker's bridge address (172.17.0.1) only.
+- Free ports on the host: **8000** (API and dashboard), **50051** (gRPC), **9090** (Prometheus), **3000** (Grafana), **9200** (Elasticsearch) and **5601** (Kibana). **All of them are bound to 127.0.0.1**, so they're reachable only from this machine, not from your network: there's no login on `/admin/faults`, Grafana or Elasticsearch. Node Exporter listens on port **9100** of Docker's bridge address (172.17.0.1) only.
 - To open the UIs from another device, change the `127.0.0.1:` prefixes in `docker-compose.yml`, but only on a network you trust.
 - About **3.5 GB of free RAM** for the whole stack: Kibana uses about 1.7 GB and Elasticsearch about 1 GB. If you're short on memory, `docker compose stop kibana` frees about 1.7 GB, and logs keep flowing into Elasticsearch without it.
 - About 6 GB of disk for the images. Elasticsearch needs `vm.max_map_count` ≥ 262144 (`cat /proc/sys/vm/max_map_count`); Ubuntu 24.04's default of 1048576 is fine.
@@ -53,6 +53,29 @@ dev-017 and dev-018 show `anomaly`. dev-020 turns `stale` for about 30 s of ever
 To start only the API, with no simulated traffic or monitoring, run `docker compose up -d --build api`.
 
 Readings are stored in SQLite at `/data/sensors.db`, inside the `sensor-data` Docker volume. The data survives `docker compose down` and restarts; only `docker compose down -v` deletes it. When the API runs without Docker, the database is `./data/sensors.db`.
+
+## Assignment 2
+
+Everything below runs against the stack started above. The callers run on the host with the project's virtualenv (see [Automated tests](#automated-tests) to create it).
+
+| What | Command |
+|---|---|
+| Tests (113, incl. gRPC in-process) | `.venv/bin/pytest -q` |
+| Regenerate the gRPC code from `proto/sensor_ingest.proto` | `scripts/gen_proto.sh` |
+| Re-export the OpenAPI document (`docs/openapi.json`) after changing routes | `.venv/bin/python scripts/export_openapi.py` |
+| Valid / repeated / conflicting / invalid reading over HTTP | `scripts/http_examples.sh` |
+| Rate limit: burst of 7 for one device → `429` + `Retry-After` | `scripts/rate_limit_demo.sh` |
+| HTTP caller, several calls | `.venv/bin/python -m clients.http_caller --calls 5` |
+| HTTP caller demo: success → retry → breaker open → recovery (uses `/admin/faults`; stop the simulator first) | `docker compose stop simulator && .venv/bin/python -m clients.http_caller --demo; docker compose start simulator` |
+| gRPC caller (input from flags, 2 s deadline) | `.venv/bin/python -m clients.grpc_caller --device dev-903 --temperature 40` |
+| gRPC failure (INVALID_ARGUMENT) | `.venv/bin/python -m clients.grpc_caller --device dev-903 --humidity 150` |
+| Success + failure through both transports, and one request ID in both services' logs | `scripts/both_transports.sh` |
+| Repeatable traffic for the Grafana row *Submit a reading: HTTP vs gRPC* (~90 s) | `.venv/bin/python scripts/a2_traffic.py --rounds 90` |
+| Screenshots for the report | `scripts/capture_a2_screenshots.sh` |
+
+- **OpenAPI:** the document is [docs/openapi.json](docs/openapi.json); the live copy is http://localhost:8000/openapi.json and Swagger UI is http://localhost:8000/docs. `tests/test_openapi.py` fails if the committed file drifts from the code.
+- **gRPC** listens on `127.0.0.1:50051` (no TLS, local only). Prometheus scrapes its metrics as job `sensor-grpc` (`grpc:9101`, inside the Compose network only).
+- **Errors** from the HTTP API are `application/problem+json`: `{type, title, status, detail, instance, request_id, errors?}`.
 
 ## Use
 
@@ -390,7 +413,7 @@ Run these steps after `docker compose up -d --build`. Each step says what you sh
 8. **Data persists.** Note dev-001's reading count, run `docker compose restart api`, and check again. The count keeps growing from where it was instead of starting from zero.
 9. **Logs reach Kibana.** Send a reading with your own request ID (add `-H 'X-Request-ID: <your id>'` to the curl in [Send a reading](#send-a-reading)), then search `request_id : "<your id>"` in Kibana. It shows the reading's 2–3 log lines within a few seconds.
 10. **Logs outlive the container.** Run `docker compose up -d --force-recreate api`. `docker compose logs api | grep <your id>` now finds nothing, but the Kibana search still finds every line.
-11. **Prometheus scrapes all targets.** This lists `node up`, `prometheus up` and `sensor-api up`:
+11. **Prometheus scrapes all targets.** This lists `node up`, `prometheus up`, `sensor-api up` and `sensor-grpc up`:
    ```bash
    curl -s localhost:9090/api/v1/targets | jq -r '.data.activeTargets[] | "\(.labels.job) \(.health)"'
    ```

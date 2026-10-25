@@ -127,10 +127,10 @@ def send(client: httpx.Client, device: Device, elapsed_s: float, stats: Counter)
             )
             return
         code = resp.status_code
-        if code == 201:
-            stats["status_201"] += 1
+        if code in (200, 201):  # 200 = an identical reading was already stored (idempotent replay)
+            stats[f"status_{code}"] += 1
             return
-        stats["status_422" if code == 422 else "status_5xx" if code >= 500 else "status_other"] += 1
+        stats[{422: "status_422", 429: "status_429"}.get(code, "status_5xx" if code >= 500 else "status_other")] += 1
         extra = {"event": "sim_send_failed", "device_id": device.device_id, "status_code": code}
         if invalid_kind:
             extra["fault"] = invalid_kind
@@ -140,7 +140,7 @@ def send(client: httpx.Client, device: Device, elapsed_s: float, stats: Counter)
 
 
 def log_summary(stats: Counter, final: bool = False) -> None:
-    keys = ("sent", "status_201", "status_422", "status_5xx", "status_other", "conn_errors")
+    keys = ("sent", "status_201", "status_200", "status_422", "status_429", "status_5xx", "status_other", "conn_errors")
     log.info(
         "simulator final summary" if final else "simulator summary",
         extra={"event": "sim_summary", "stats": {k: stats[k] for k in keys}},

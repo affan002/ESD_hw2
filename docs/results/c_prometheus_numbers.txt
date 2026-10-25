@@ -1,0 +1,42 @@
+# evaluated at 2026-10-25T17:15:35Z (end of scripts/a2_traffic.py --rounds 150, started 17:13:01Z; simulator also running on HTTP)
+histogram_quantile(0.5, sum by (le) (rate(sensor_http_request_duration_seconds_bucket{route="/readings",method="POST"}[2m])))
+    {} 0.01136006289308176
+histogram_quantile(0.95, sum by (le) (rate(sensor_http_request_duration_seconds_bucket{route="/readings",method="POST"}[2m])))
+    {} 0.025260416666666653
+histogram_quantile(0.5, sum by (le) (rate(sensor_grpc_request_duration_seconds_bucket{method="SubmitReading"}[2m])))
+    {} 0.0037419871794871795
+histogram_quantile(0.95, sum by (le) (rate(sensor_grpc_request_duration_seconds_bucket{method="SubmitReading"}[2m])))
+    {} 0.009603146853146852
+sum by (method, code) (increase(sensor_grpc_requests_total[2m]))
+    {'code': 'OK', 'method': 'SubmitReading'} 302.6086956521739
+    {'code': 'INVALID_ARGUMENT', 'method': 'SubmitReading'} 120
+    {'code': 'ALREADY_EXISTS', 'method': 'SubmitReading'} 39.65217391304348
+    {'code': 'RESOURCE_EXHAUSTED', 'method': 'SubmitReading'} 25.043478260869563
+    {'code': 'INTERNAL', 'method': 'SubmitReading'} 0
+sum by (status_code) (increase(sensor_http_requests_total{route="/readings",method="POST"}[2m]))
+    {'status_code': '201'} 643.8260869565217
+    {'status_code': '422'} 126.26086956521739
+    {'status_code': '500'} 0
+    {'status_code': '200'} 120
+    {'status_code': '429'} 25.043478260869563
+    {'status_code': '409'} 39.65217391304348
+sum by (route) (increase(sensor_rate_limited_total[2m]))
+    {'route': '/readings'} 25.043478260869563
+    {'route': 'SubmitReading'} 25.043478260869563
+sum by (transport, outcome) (increase(sensor_readings_total[2m]))
+    {'outcome': 'normal', 'transport': 'http'} 602.0869565217391
+    {'outcome': 'anomaly', 'transport': 'http'} 41.73913043478261
+    {'outcome': 'replayed', 'transport': 'http'} 120
+    {'outcome': 'conflict', 'transport': 'http'} 39.65217391304348
+    {'outcome': 'rejected', 'transport': 'http'} 126.26086956521739
+    {'outcome': 'failed', 'transport': 'http'} 0
+    {'outcome': 'normal', 'transport': 'grpc'} 182.6086956521739
+    {'outcome': 'anomaly', 'transport': 'grpc'} 0
+    {'outcome': 'replayed', 'transport': 'grpc'} 120
+    {'outcome': 'conflict', 'transport': 'grpc'} 39.65217391304348
+    {'outcome': 'rejected', 'transport': 'grpc'} 120
+    {'outcome': 'failed', 'transport': 'grpc'} 0
+histogram_quantile(0.95, sum by (le) (rate(sensor_db_write_duration_seconds_bucket[2m])))
+    {} 0.018592592592592567
+sum(rate(sensor_db_write_duration_seconds_sum[2m])) / sum(rate(sensor_db_write_duration_seconds_count[2m]))
+    {} 0.007118491013990034

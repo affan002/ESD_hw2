@@ -34,6 +34,12 @@
         "path":            { "type": "keyword" },
         "status_code":     { "type": "integer" },
         "duration_ms":     { "type": "float" },
+        "rpc_method":      { "type": "keyword" },
+        "grpc_code":       { "type": "keyword" },
+        "grpc_details":    { "type": "text" },
+        "transport":       { "type": "keyword" },
+        "retry_after_s":   { "type": "integer" },
+        "existing_reading_id": { "type": "long" },
 
         "errors": {
           "properties": {
