@@ -4,6 +4,16 @@ This service receives readings from simulated temperature, humidity and battery 
 
 > **Assignment 2** (HTTP APIs, gRPC, metrics) extends the Assignment 1 project (tag `a1-submission`). New in A2: one RFC 9457 error format, idempotent `POST /readings`, a per-device rate limit, a committed OpenAPI document, Python callers with timeout/retry/circuit breaker, a gRPC `SubmitReading` service in its own container, and gRPC metrics in Prometheus/Grafana. See [Assignment 2](#assignment-2) below and [REPORT.md](REPORT.md). Design decisions: [docs/DECISIONS.md](docs/DECISIONS.md).
 
+## Video walkthrough
+
+A screen-recorded walkthrough of Assignment 2: the system, the HTTP API improvements, the gRPC service and the metrics.
+
+https://github.com/affan002/ESD_hw2/raw/main/docs/video/assignment2-demo.mp4
+
+<video src="https://github.com/affan002/ESD_hw2/raw/main/docs/video/assignment2-demo.mp4" controls width="100%"></video>
+
+If the player doesn't load, open the file directly: [docs/video/assignment2-demo.mp4](docs/video/assignment2-demo.mp4) (MP4, 24 MB).
+
 ## Prerequisites
 
 - Docker Engine with the Compose v2 plugin (`docker compose version`).
