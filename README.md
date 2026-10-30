@@ -6,13 +6,11 @@ This service receives readings from simulated temperature, humidity and battery 
 
 ## Video walkthrough
 
-A screen-recorded walkthrough of Assignment 2: the system, the HTTP API improvements, the gRPC service and the metrics.
+A screen-recorded walkthrough of Assignment 2: the system, the HTTP API improvements, the gRPC service and the metrics. Click the image to watch it on YouTube.
 
-https://github.com/affan002/ESD_hw2/raw/main/docs/video/assignment2-demo.mp4
+[![Assignment 2 video walkthrough: click to watch on YouTube](docs/video/thumbnail.png)](https://youtu.be/yqzSbpByMh4)
 
-<video src="https://github.com/affan002/ESD_hw2/raw/main/docs/video/assignment2-demo.mp4" controls width="100%"></video>
-
-If the player doesn't load, open the file directly: [docs/video/assignment2-demo.mp4](docs/video/assignment2-demo.mp4) (MP4, 24 MB).
+**▶ Watch: https://youtu.be/yqzSbpByMh4** (unlisted). A copy of the recording is also in the repository: [docs/video/assignment2-demo.mp4](docs/video/assignment2-demo.mp4).
 
 ## Prerequisites
 

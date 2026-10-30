@@ -6,7 +6,7 @@ Enterprise Software Development, Fall 2026, Assignment 2. Individual submission 
 - **Run and test:** [README.md](README.md), section *Assignment 2*.
 - **Design decisions** (choice, reason, rejected alternative): [docs/DECISIONS.md](docs/DECISIONS.md).
 - **Raw outputs** behind every number here: [docs/results/](docs/results/).
-- **Video walkthrough:** [docs/video/assignment2-demo.mp4](docs/video/assignment2-demo.mp4) (also linked at the top of the README).
+- **Video walkthrough:** https://youtu.be/yqzSbpByMh4 (unlisted on YouTube; a copy is in [docs/video/assignment2-demo.mp4](docs/video/assignment2-demo.mp4)).
 
 ---
 
